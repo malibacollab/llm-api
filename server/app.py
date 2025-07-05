@@ -1,4 +1,5 @@
-from logging import getLogger
+from functools import partial
+from logging import Logger, getLogger
 
 from litestar import Litestar, Response, Router
 from litestar.openapi import OpenAPIConfig
@@ -11,7 +12,7 @@ from server.config import Config
 from server.lifespans import chat_model, consul_register
 
 
-def exception_handler(_, exception: Exception) -> Response[dict[str, str]]:
+def exception_handler(logger: Logger, _, exception: Exception) -> Response[dict[str, str]]:
     """
     Summary
     -------
@@ -19,16 +20,20 @@ def exception_handler(_, exception: Exception) -> Response[dict[str, str]]:
 
     Parameters
     ----------
+    logger (Logger)
+        the logger instance
+
     request (Request)
         the request
 
     exception (Exception)
         the exception
     """
-    getLogger('custom.access').error(exception, exc_info=True)
+    error_message = 'Internal Server Error'
+    logger.error(error_message, exc_info=exception)
 
     return Response(
-        content={'detail': 'Internal Server Error'},
+        content={'detail': error_message},
         status_code=HTTP_500_INTERNAL_SERVER_ERROR,
     )
 
@@ -47,11 +52,12 @@ def app() -> Litestar:
         servers=[Server(url=Config.server_root_path)],
     )
 
+    logger = getLogger('custom.access')
     v1_router = Router('/v1', tags=['v1'], route_handlers=[v1.ChatController])
 
     return Litestar(
         openapi_config=openapi_config,
-        exception_handlers={HTTP_500_INTERNAL_SERVER_ERROR: exception_handler},
+        exception_handlers={HTTP_500_INTERNAL_SERVER_ERROR: partial(exception_handler, logger)},
         route_handlers=[PrometheusController, v1_router, health],
         lifespan=[chat_model, consul_register],
         middleware=[PrometheusConfig(app_name=Config.app_name).middleware],

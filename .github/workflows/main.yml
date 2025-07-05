@@ -8,7 +8,7 @@ on:
       - Dockerfile.build
       - pyproject.toml
       - uv.lock
-      - '**.py'
+      - server/**
 
 jobs:
   test:
@@ -17,7 +17,13 @@ jobs:
       disable-test: true
 
   build:
+    uses: winstxnhdw/actions/.github/workflows/docker-build.yml@main
+    with:
+      file: Dockerfile.build
+
+  push:
     if: github.ref == 'refs/heads/main'
+    needs: [test, build]
     uses: winstxnhdw/actions/.github/workflows/docker-push.yml@main
     with:
       file: Dockerfile.build
@@ -27,8 +33,7 @@ jobs:
       packages: write
 
   restart:
-    if: github.ref == 'refs/heads/main'
-    needs: [test, build]
+    needs: push
     uses: winstxnhdw/actions/.github/workflows/spaces-restart.yml@main
     secrets:
       token: ${{ secrets.HF_TOKEN }}
